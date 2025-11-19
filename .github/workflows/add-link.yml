@@ -24,13 +24,13 @@ jobs:
             const fs = require('fs');
             const body = context.payload.issue.body;
 
-            /* 提取 JSON 块 */
-            const m = body.match(/```json\s*([\s\S]*?)\s*```/);
+            /* === ① 兼容“有/无围栏”都能抓到 JSON === */
+            const m = body.match(/(?:```json\s*([\s\S]*?)\s*```)|(\{[\s\S]*?\})/);
             if (!m) throw '❌ 未找到 JSON 块';
             let raw;
-            try { raw = JSON.parse(m[1]); } catch { throw '❌ JSON 格式错误'; }
+            try { raw = JSON.parse(m[1] || m[0]); } catch { throw '❌ JSON 格式错误'; }
 
-            /* 字段映射 */
+            /* === ② 字段映射 === */
             const entry = {
               author:  raw.author  || '',
               sitenick:raw.sitenick|| '',
@@ -40,7 +40,7 @@ jobs:
               date: new Date().toISOString().slice(0,10)
             };
 
-            /* 追加到 data.json */
+            /* === ③ 追加到 data.json === */
             const list = JSON.parse(fs.readFileSync('data.json','utf8')||'[]');
             list.push(entry);
             fs.writeFileSync('data.json', JSON.stringify(list,null,2));
