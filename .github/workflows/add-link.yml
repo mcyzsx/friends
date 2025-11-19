@@ -7,7 +7,10 @@ on:
 jobs:
   add-link:
     runs-on: ubuntu-latest
-    if: contains(github.event.issue.labels.*.name, '已通过')
+    # ① 标签已通过 ② 关闭者是仓库所有者
+    if: |
+      contains(github.event.issue.labels.*.name, '已通过') &&
+      github.actor == github.repository_owner
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -24,13 +27,13 @@ jobs:
             const fs = require('fs');
             const body = context.payload.issue.body;
 
-            /* === ① 兼容“有/无围栏”都能抓到 JSON === */
+            /* === 提取 JSON（兼容有无围栏）=== */
             const m = body.match(/(?:```json\s*([\s\S]*?)\s*```)|(\{[\s\S]*?\})/);
             if (!m) throw '❌ 未找到 JSON 块';
             let raw;
             try { raw = JSON.parse(m[1] || m[0]); } catch { throw '❌ JSON 格式错误'; }
 
-            /* === ② 字段映射 === */
+            /* === 字段映射 === */
             const entry = {
               author:  raw.author  || '',
               sitenick:raw.sitenick|| '',
@@ -40,7 +43,7 @@ jobs:
               date: new Date().toISOString().slice(0,10)
             };
 
-            /* === ③ 追加到 data.json === */
+            /* === 追加到 data.json === */
             const list = JSON.parse(fs.readFileSync('data.json','utf8')||'[]');
             list.push(entry);
             fs.writeFileSync('data.json', JSON.stringify(list,null,2));
