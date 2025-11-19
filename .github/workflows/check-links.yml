@@ -32,7 +32,7 @@ jobs:
             const alive = [], dead = [];
 
             for (const it of data) {
-              const url = it.url.trim();
+              const url = it.link.trim();
               try {
                 await axios.get(url,{timeout:10000});
                 delete fail[url];
@@ -44,7 +44,7 @@ jobs:
               }
             }
 
-            /* 标记失联 issue */
+            /* 给对应 issue 打“失联中”标签 */
             for (const {url} of dead) {
               const {data: issues} = await github.rest.issues.listForRepo({
                 ...context.repo,
