@@ -17,20 +17,30 @@ jobs:
         with:
           node-version: 18
 
-      - name: Install deps
-        run: npm i js-yaml axios
-
-      - name: Parse and append
+      - name: Parse & append
         uses: actions/github-script@v6
         with:
           script: |
             const fs = require('fs');
             const body = context.payload.issue.body;
-            const m = body.match(/```json\s*([\s\S]*?)\s*```/);
-            if (!m) throw '未找到 JSON 块';
-            let entry;
-            try { entry = JSON.parse(m[1]); } catch { throw 'JSON 格式错误'; }
 
+            /* 提取 JSON 块 */
+            const m = body.match(/```json\s*([\s\S]*?)\s*```/);
+            if (!m) throw '❌ 未找到 JSON 块';
+            let raw;
+            try { raw = JSON.parse(m[1]); } catch { throw '❌ JSON 格式错误'; }
+
+            /* 字段映射 */
+            const entry = {
+              author:  raw.author  || '',
+              sitenick:raw.sitenick|| '',
+              link:    raw.link    || '',
+              avatar:  raw.avatar  || '',
+              desc:    raw.desc    || '',
+              date: new Date().toISOString().slice(0,10)
+            };
+
+            /* 追加到 data.json */
             const list = JSON.parse(fs.readFileSync('data.json','utf8')||'[]');
             list.push(entry);
             fs.writeFileSync('data.json', JSON.stringify(list,null,2));
