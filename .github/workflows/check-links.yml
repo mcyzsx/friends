@@ -1,0 +1,73 @@
+name: Weekly Link Health Check
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'   # 每周一 00:00 UTC
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      - name: Install deps
+        run: npm i axios
+
+      - name: Check & prune
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const axios = require('axios');
+            const fs  = require('fs');
+            const data = JSON.parse(fs.readFileSync('data.json','utf8')||'[]');
+            const fail = JSON.parse(fs.readFileSync('failure_count.json','utf8')||'{}');
+
+            const alive = [], dead = [];
+
+            for (const it of data) {
+              const url = it.url.trim();
+              try {
+                await axios.get(url,{timeout:10000});
+                delete fail[url];
+                alive.push(it);
+              } catch {
+                fail[url] = (fail[url]||0) + 1;
+                if (fail[url] < 3) alive.push(it);
+                else dead.push({url,it});
+              }
+            }
+
+            /* 标记失联 issue */
+            for (const {url} of dead) {
+              const {data: issues} = await github.rest.issues.listForRepo({
+                ...context.repo,
+                state: 'all',
+                labels: '已通过'
+              });
+              const issue = issues.find(i=>i.body.includes(url));
+              if (issue) {
+                await github.rest.issues.addLabels({
+                  ...context.repo,
+                  issue_number: issue.number,
+                  labels: ['失联中']
+                });
+              }
+            }
+
+            fs.writeFileSync('data.json', JSON.stringify(alive,null,2));
+            fs.writeFileSync('failure_count.json', JSON.stringify(fail,null,2));
+
+      - name: Commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data.json failure_count.json
+          git commit -m "Weekly link health check"
+          git push
