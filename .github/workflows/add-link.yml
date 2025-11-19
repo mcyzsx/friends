@@ -7,7 +7,6 @@ on:
 jobs:
   add-link:
     runs-on: ubuntu-latest
-    # ① 标签已通过 ② 关闭者是仓库所有者
     if: |
       contains(github.event.issue.labels.*.name, '已通过') &&
       github.actor == github.repository_owner
@@ -20,32 +19,39 @@ jobs:
         with:
           node-version: 18
 
-      - name: Parse & append
+      - name: Parse & upsert
         uses: actions/github-script@v6
         with:
           script: |
             const fs = require('fs');
             const body = context.payload.issue.body;
 
-            /* === 提取 JSON（兼容有无围栏）=== */
+            /* 1. 提取 JSON */
             const m = body.match(/(?:```json\s*([\s\S]*?)\s*```)|(\{[\s\S]*?\})/);
             if (!m) throw '❌ 未找到 JSON 块';
             let raw;
             try { raw = JSON.parse(m[1] || m[0]); } catch { throw '❌ JSON 格式错误'; }
 
-            /* === 字段映射 === */
-            const entry = {
+            /* 2. 构造目标对象 */
+            const now = new Date().toISOString().slice(0,10);
+            const incoming = {
               author:  raw.author  || '',
               sitenick:raw.sitenick|| '',
               link:    raw.link    || '',
               avatar:  raw.avatar  || '',
               desc:    raw.desc    || '',
-              date: new Date().toISOString().slice(0,10)
+              date:    raw.date    || now          // 保留旧日期或新增
             };
 
-            /* === 追加到 data.json === */
+            /* 3. 读库 */
             const list = JSON.parse(fs.readFileSync('data.json','utf8')||'[]');
-            list.push(entry);
+
+            /* 4. 按 link 当唯一键：找同链接就更新，否则追加 */
+            const idx = list.findIndex(e => e.link === incoming.link);
+            if (idx === -1) list.push(incoming);
+            else list[idx] = incoming;            // 原地更新
+
+            /* 5. 写回 */
             fs.writeFileSync('data.json', JSON.stringify(list,null,2));
 
       - name: Commit
@@ -53,5 +59,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data.json
-          git commit -m "Add link from #${{ github.event.issue.number }}"
+          git commit -m "Upsert link from #${{ github.event.issue.number }}"
           git push
