@@ -68,6 +68,15 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # 把已经 tracked 的 npm 文件从索引里扔掉（工作区保留，.gitignore 立即生效）
+          git rm -r --cached node_modules package-lock.json package.json || true
+          
+          # 再把咱们真正想持久化的文件加回去
           git add data.json failure_count.json
-          git commit -m "Weekly link health check"
+          
+          # 只有真正发生变化才提交，避免空提交失败
+          git diff --staged --quiet || git commit -m "Weekly link health check"
+          
+          # 推送到仓库
           git push
